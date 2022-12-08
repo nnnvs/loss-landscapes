@@ -4,18 +4,26 @@ from models.resnet import ResNet
 import torch.optim as optim
 from torchvision import datasets, transforms
 from utils.training import train, test
-
+import logging 
+import time 
+import os 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--batch_size', type=int, default=100)
-    parser.add_argument('--opt', type=str, default='adam')
+    parser.add_argument('--opt', type=str, default='SGD')
     parser.add_argument('--depth', type=int, default=22)
     parser.add_argument('--width-multiplier', type=int, default=2)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',help='how many batches to wait before logging training status')
     args = parser.parse_args()
+    out_dir = f"./trained_models/resnet_{str(args.depth)}_{str(args.seed)}/cifar10/"
+    log_file_path = out_dir + f"resnet_cifar10_{str(args.depth)}_{str(args.seed)}_{str(args.width_multiplier)}.log"
+    model_checkpoint_path = out_dir + f"resnet_cifar10_{str(args.depth)}_{str(args.seed)}_{str(args.width_multiplier)}_final.pt"
+    logging.basicConfig(filename= log_file_path, filemode= 'w')
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
 
     # Get data
     args = parser.parse_args()
@@ -64,14 +72,20 @@ def main():
     else:
         optimizer = optim.SGD(model.parameters(), momentum=0.9, lr=args.lr, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
-
+    start = time.time()
+    end = time.time()
+    total_time = end - start
     for epoch in range(1, args.epochs + 1):
-        train(args, model, device, train_loader, optimizer, epoch, True)
-        test(model, device, test_loader, True)
+        start = time.time()
+        train(args, model, device, train_loader, optimizer, epoch, logger, True)
+        end = time.time()
+        total_time += end - start
+        test(model, device, test_loader, logger, True)
         scheduler.step()
-
-    torch.save(model.state_dict(), f"cifar10_{str(args.seed)}_resnet_depth_{str(args.depth)}_{str(args.width_multiplier)}_2.pt")
-
+        if epoch%10 == 0:
+            torch.save(model.state_dict(),out_dir + f"resnet_cifar10_{str(args.depth)}_{str(args.seed)}_{str(args.width_multiplier)}_{str(epoch)}.pt")
+    logger.info(f"total_trainnig_time: {str(total_time)}")
+    torch.save(model.state_dict(), model_checkpoint_path)
 
 if __name__ == "__main__":
   main()
